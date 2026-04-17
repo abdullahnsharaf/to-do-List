@@ -28,27 +28,31 @@ export default async function DashboardPage() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[2rem] bg-white p-6 shadow-ambient">
+        <div className="theme-card rounded-[2rem] p-6 shadow-ambient">
           <div className="mb-6 flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">المهام الحديثة</h2>
-              <p className="text-sm text-text-soft">آخر ما تمت إضافته إلى مساحة العمل الخاصة بك.</p>
+              <p className="text-sm theme-text-muted">آخر ما تمت إضافته إلى مساحة العمل الخاصة بك.</p>
             </div>
           </div>
+
           {data.recentTasks.length === 0 ? (
             <EmptyState title="لا توجد مهام بعد" description="ابدأ بإضافة أول مهمة من صفحة المهام." />
           ) : (
             <div className="space-y-4">
               {data.recentTasks.map((task) => (
-                <div key={task.id} className="rounded-3xl bg-surface-low p-4">
+                <div key={task.id} className="theme-muted rounded-3xl p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <h3 className="font-semibold">{task.title}</h3>
-                      <p className="mt-1 text-sm text-text-soft">{formatTaskDate(task.dueDate)}</p>
+                      <p className="mt-1 text-sm theme-text-muted">{formatTaskDate(task.dueDate)}</p>
                     </div>
+
                     <div className="flex items-center gap-2">
                       {task.category ? (
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium">{task.category.name}</span>
+                        <span className="theme-card rounded-full px-3 py-1 text-xs font-medium">
+                          {task.category.name}
+                        </span>
                       ) : null}
                       <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getPriorityTone(task.priority)}`}>
                         {getPriorityLabel(task.priority)}
@@ -62,20 +66,21 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-[2rem] bg-white p-6 shadow-ambient">
+          <div className="theme-card rounded-[2rem] p-6 shadow-ambient">
             <h2 className="text-xl font-bold">نبض الإنتاجية</h2>
-            <p className="mt-2 text-sm leading-7 text-text-soft">
+            <p className="mt-2 text-sm leading-7 theme-text-muted">
               أنجزت هذا الأسبوع <span className="font-bold text-primary">{data.productivity.doneThisWeek}</span> مهمة.
             </p>
-            <p className="mt-3 text-sm leading-7 text-text-soft">
+            <p className="mt-3 text-sm leading-7 theme-text-muted">
               {data.productivity.focusCategory
                 ? `أكثر تصنيف نشاطًا حاليًا هو ${data.productivity.focusCategory.name}.`
                 : "عند إنشاء التصنيفات والمهام ستظهر هنا قراءة سريعة لنمط عملك."}
             </p>
           </div>
-          <div className="rounded-[2rem] bg-surface-low p-6">
+
+          <div className="theme-muted rounded-[2rem] p-6">
             <h3 className="text-xl font-bold">اقتراح عملي</h3>
-            <p className="mt-3 text-sm leading-7 text-text-soft">
+            <p className="mt-3 text-sm leading-7 theme-text-muted">
               أوصي بإضافة تاريخ استحقاق للمهمات عالية الأولوية فقط، حتى تبقى الصفحة خفيفة ولا تتحول
               المواعيد إلى ضوضاء مستمرة.
             </p>
