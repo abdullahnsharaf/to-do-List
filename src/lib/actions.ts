@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { AuthError } from "next-auth";
 import { revalidatePath } from "next/cache";
 import type { Route } from "next";
@@ -31,71 +32,64 @@ function failure(message: string, fieldErrors?: Record<string, string[] | undefi
 }
 
 export async function registerUserAction(input: FormData | Record<string, unknown>): Promise<ActionResult> {
-  const values =
-    input instanceof FormData
-      ? Object.fromEntries(input.entries())
-      : input;
-
+  const values = input instanceof FormData ? Object.fromEntries(input.entries()) : input;
   const parsed = signUpSchema.safeParse(values);
 
   if (!parsed.success) {
     return failure("تحقق من البيانات المدخلة.", parsed.error.flatten().fieldErrors);
   }
 
-  const existingUser = await prisma.user.findUnique({
-    where: { email: parsed.data.email }
-  });
-
-  if (existingUser) {
-    return failure("هذا البريد مستخدم بالفعل.");
-  }
-
-  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
-
-  const user = await prisma.user.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      passwordHash
-    }
-  });
-
-  await Promise.all(
-    [
-      { name: "عمل", color: "#111111" },
-      { name: "دراسة", color: "#5e5e5e" },
-      { name: "شخصي", color: "#8c8c8c" }
-    ].map((category) =>
-      prisma.category.create({
-        data: {
-          ...category,
-          userId: user.id
-        }
-      })
-    )
-  );
-
   try {
-    await signIn("credentials", {
-      email: parsed.data.email,
-      password: parsed.data.password,
-      redirect: false
+    const existingUser = await prisma.user.findUnique({
+      where: { email: parsed.data.email }
     });
-  } catch (error) {
-    if (error instanceof AuthError) {
-      return failure("تم إنشاء الحساب لكن تعذر تسجيل الدخول تلقائيًا.");
-    }
-    throw error;
-  }
 
-  return success("تم إنشاء الحساب بنجاح.");
+    if (existingUser) {
+      return failure("هذا البريد مستخدم بالفعل.");
+    }
+
+    const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+
+    const user = await prisma.user.create({
+      data: {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        passwordHash
+      }
+    });
+
+    await Promise.all(
+      [
+        { name: "عمل", color: "#111111" },
+        { name: "دراسة", color: "#5e5e5e" },
+        { name: "شخصي", color: "#8c8c8c" }
+      ].map((category) =>
+        prisma.category.create({
+          data: {
+            ...category,
+            userId: user.id
+          }
+        })
+      )
+    );
+
+    return success("تم إنشاء الحساب بنجاح. يمكنك الآن تسجيل الدخول.");
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return failure("هذا البريد مستخدم بالفعل.");
+    }
+
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      return failure("تعذر الاتصال بقاعدة البيانات حاليًا. حاول مرة أخرى بعد قليل.");
+    }
+
+    console.error("registerUserAction", error);
+    return failure("تعذر إنشاء الحساب حاليًا. حاول مرة أخرى بعد قليل.");
+  }
 }
 
 export async function loginUserAction(input: FormData | Record<string, unknown>): Promise<ActionResult> {
-  const values =
-    input instanceof FormData
-      ? Object.fromEntries(input.entries())
-      : input;
+  const values = input instanceof FormData ? Object.fromEntries(input.entries()) : input;
 
   try {
     await signIn("credentials", {
@@ -110,7 +104,12 @@ export async function loginUserAction(input: FormData | Record<string, unknown>)
       return failure("البريد الإلكتروني أو كلمة المرور غير صحيحة.");
     }
 
-    throw error;
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      return failure("تعذر الاتصال بقاعدة البيانات حاليًا. حاول مرة أخرى بعد قليل.");
+    }
+
+    console.error("loginUserAction", error);
+    return failure("تعذر تسجيل الدخول حاليًا. حاول مرة أخرى بعد قليل.");
   }
 }
 
