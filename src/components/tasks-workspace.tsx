@@ -6,6 +6,7 @@ import type { Route } from "next";
 import {
   Calendar,
   Check,
+  CircleX,
   LoaderCircle,
   Pencil,
   Plus,
@@ -15,9 +16,9 @@ import {
 import { toast } from "sonner";
 
 import { createTaskAction, deleteTaskAction, toggleTaskAction, updateTaskAction } from "@/lib/actions";
-import { cn, formatTaskDate, getPriorityLabel, getPriorityTone, isOverdue } from "@/lib/utils";
-import type { CategoryEntity, PriorityLevel, TaskWithCategory, UserPreferences } from "@/lib/types";
 import { EmptyState } from "@/components/empty-state";
+import type { CategoryEntity, PriorityLevel, TaskWithCategory, UserPreferences } from "@/lib/types";
+import { cn, formatTaskDate, getPriorityLabel, getPriorityTone, isOverdue } from "@/lib/utils";
 
 type Workspace = {
   user: UserPreferences;
@@ -56,8 +57,10 @@ export function TasksWorkspace({
   const pathname = usePathname();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
   const [form, setForm] = useState(defaultForm);
   const [editingTask, setEditingTask] = useState<TaskWithCategory | null>(null);
+  const [searchValue, setSearchValue] = useState(initialFilters.q ?? "");
 
   const query = useMemo(() => initialFilters.q ?? "", [initialFilters.q]);
 
@@ -70,17 +73,21 @@ export function TasksWorkspace({
       next.set(key, value);
     }
 
-    router.push(`${pathname}?${next.toString()}` as Route);
+    const queryString = next.toString();
+    router.push((queryString ? `${pathname}?${queryString}` : pathname) as Route);
   };
 
   const submitCreate = () => {
     startTransition(async () => {
       const result = await createTaskAction(form);
+
       if (!result.ok) {
+        setErrors(result.fieldErrors ?? {});
         toast.error(result.message);
         return;
       }
 
+      setErrors({});
       toast.success(result.message);
       setForm(defaultForm);
       router.refresh();
@@ -102,10 +109,12 @@ export function TasksWorkspace({
       });
 
       if (!result.ok) {
+        setErrors(result.fieldErrors ?? {});
         toast.error(result.message);
         return;
       }
 
+      setErrors({});
       toast.success(result.message);
       setEditingTask(null);
       setForm(defaultForm);
@@ -115,6 +124,7 @@ export function TasksWorkspace({
 
   const openEdit = (task: TaskWithCategory) => {
     setEditingTask(task);
+    setErrors({});
     setForm({
       title: task.title,
       description: task.description ?? "",
@@ -122,6 +132,12 @@ export function TasksWorkspace({
       categoryId: task.categoryId ?? "",
       dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : ""
     });
+  };
+
+  const resetEditor = () => {
+    setEditingTask(null);
+    setErrors({});
+    setForm(defaultForm);
   };
 
   const handleDelete = (taskId: string) => {
@@ -170,22 +186,27 @@ export function TasksWorkspace({
           <h2 className="text-xl font-bold">{editingTask ? "تعديل المهمة" : "إضافة مهمة سريعة"}</h2>
           {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
         </div>
+
         <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr_0.8fr_auto]">
           <div>
             <label className="mb-2 block text-xs font-semibold text-text-soft">عنوان المهمة</label>
             <input
               value={form.title}
               onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
-              className="w-full rounded-2xl border-none bg-surface-low px-4 py-3"
+              dir="rtl"
+              autoComplete="off"
+              className="w-full rounded-2xl border border-outline-soft/40 bg-surface-low px-4 py-3 text-text-base outline-none transition placeholder:text-text-soft/60 focus:border-primary focus:bg-white focus:ring-4 focus:ring-black/5"
               placeholder="أضف مهمة جديدة..."
             />
+            {errors.title?.[0] ? <p className="mt-2 text-xs text-danger">{errors.title[0]}</p> : null}
           </div>
+
           <div>
             <label className="mb-2 block text-xs font-semibold text-text-soft">التصنيف</label>
             <select
               value={form.categoryId}
               onChange={(event) => setForm((current) => ({ ...current, categoryId: event.target.value }))}
-              className="w-full rounded-2xl border-none bg-surface-low px-4 py-3"
+              className="w-full rounded-2xl border border-outline-soft/40 bg-surface-low px-4 py-3 text-text-base outline-none transition focus:border-primary focus:bg-white focus:ring-4 focus:ring-black/5"
             >
               <option value="">بدون تصنيف</option>
               {initialData.categories.map((category) => (
@@ -195,45 +216,63 @@ export function TasksWorkspace({
               ))}
             </select>
           </div>
+
           <div>
             <label className="mb-2 block text-xs font-semibold text-text-soft">الأولوية</label>
             <select
               value={form.priority}
               onChange={(event) => setForm((current) => ({ ...current, priority: event.target.value as PriorityLevel }))}
-              className="w-full rounded-2xl border-none bg-surface-low px-4 py-3"
+              className="w-full rounded-2xl border border-outline-soft/40 bg-surface-low px-4 py-3 text-text-base outline-none transition focus:border-primary focus:bg-white focus:ring-4 focus:ring-black/5"
             >
               <option value="HIGH">عالية</option>
               <option value="MEDIUM">متوسطة</option>
               <option value="LOW">منخفضة</option>
             </select>
           </div>
+
           <div className="self-end">
-            <button
-              onClick={editingTask ? submitEdit : submitCreate}
-              className="inline-flex min-w-32 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary-soft"
-            >
-              {editingTask ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-              {editingTask ? "حفظ" : "إضافة"}
-            </button>
+            <div className="flex gap-2">
+              {editingTask ? (
+                <button
+                  onClick={resetEditor}
+                  className="inline-flex min-w-24 items-center justify-center gap-2 rounded-2xl bg-surface-low px-4 py-3 text-sm font-semibold text-text-soft transition hover:bg-surface-high"
+                >
+                  <CircleX className="h-4 w-4" />
+                  إلغاء
+                </button>
+              ) : null}
+              <button
+                onClick={editingTask ? submitEdit : submitCreate}
+                disabled={pending}
+                className="inline-flex min-w-32 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary-soft disabled:opacity-60"
+              >
+                {editingTask ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {editingTask ? "حفظ" : "إضافة"}
+              </button>
+            </div>
           </div>
         </div>
+
         <div className="mt-4 grid gap-4 md:grid-cols-[1.4fr_0.8fr]">
           <div>
             <label className="mb-2 block text-xs font-semibold text-text-soft">الوصف</label>
             <textarea
               value={form.description}
               onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-              className="min-h-28 w-full rounded-2xl border-none bg-surface-low px-4 py-3"
+              dir="rtl"
+              className="min-h-28 w-full rounded-2xl border border-outline-soft/40 bg-surface-low px-4 py-3 text-text-base outline-none transition placeholder:text-text-soft/60 focus:border-primary focus:bg-white focus:ring-4 focus:ring-black/5"
               placeholder="أضف تفاصيل اختيارية..."
             />
+            {errors.description?.[0] ? <p className="mt-2 text-xs text-danger">{errors.description[0]}</p> : null}
           </div>
+
           <div>
             <label className="mb-2 block text-xs font-semibold text-text-soft">التاريخ</label>
             <input
               type="date"
               value={form.dueDate}
               onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))}
-              className="w-full rounded-2xl border-none bg-surface-low px-4 py-3"
+              className="w-full rounded-2xl border border-outline-soft/40 bg-surface-low px-4 py-3 text-text-base outline-none transition focus:border-primary focus:bg-white focus:ring-4 focus:ring-black/5"
             />
           </div>
         </div>
@@ -244,16 +283,36 @@ export function TasksWorkspace({
           <div className="flex items-center gap-3 rounded-2xl bg-surface-low px-4 py-3">
             <Search className="h-4 w-4 text-text-soft" />
             <input
-              defaultValue={query}
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  updateFilter("q", (event.target as HTMLInputElement).value);
+                  updateFilter("q", searchValue);
                 }
               }}
+              dir="rtl"
               className="w-full border-none bg-transparent p-0 text-sm focus:ring-0"
               placeholder="ابحث في المهام أو التصنيفات"
             />
+            <button
+              onClick={() => updateFilter("q", searchValue)}
+              className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-text-base shadow-ambient"
+            >
+              بحث
+            </button>
+            {query ? (
+              <button
+                onClick={() => {
+                  setSearchValue("");
+                  updateFilter("q", "");
+                }}
+                className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-text-soft shadow-ambient"
+              >
+                مسح
+              </button>
+            ) : null}
           </div>
+
           <div className="flex flex-wrap gap-2">
             {[
               ["all", "الكل"],
@@ -274,6 +333,7 @@ export function TasksWorkspace({
               </button>
             ))}
           </div>
+
           <select
             value={initialFilters.sort ?? "newest"}
             onChange={(event) => updateFilter("sort", event.target.value)}
@@ -329,6 +389,7 @@ export function TasksWorkspace({
                     </div>
                   </div>
                 </div>
+
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => openEdit(task)}

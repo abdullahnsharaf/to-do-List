@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Globe, MoonStar, Plus, Save, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Globe, MoonStar, Plus, Save, Trash2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
@@ -23,12 +23,14 @@ export function SettingsPanel({
   const [locale, setLocale] = useState<"ar" | "en">((user.locale as "ar" | "en") ?? "ar");
   const [notifications, setNotifications] = useState(user.notifications);
   const [categoryName, setCategoryName] = useState("");
+  const [categoryError, setCategoryError] = useState("");
   const { setTheme: applyTheme } = useTheme();
   const router = useRouter();
 
   const saveSettings = () => {
     startTransition(async () => {
       const result = await updateSettingsAction({ theme, locale, notifications });
+
       if (!result.ok) {
         toast.error(result.message);
         return;
@@ -36,19 +38,29 @@ export function SettingsPanel({
 
       applyTheme(theme);
       toast.success(result.message);
+      router.refresh();
     });
   };
 
   const createCategory = () => {
-    if (!categoryName.trim()) return;
+    if (!categoryName.trim()) {
+      const message = "اكتب اسم التصنيف أولًا.";
+      setCategoryError(message);
+      toast.error(message);
+      return;
+    }
 
     startTransition(async () => {
-      const result = await upsertCategoryAction({ name: categoryName, color: "#111111" });
+      const result = await upsertCategoryAction({ name: categoryName.trim(), color: "#111111" });
+
       if (!result.ok) {
+        const message = result.fieldErrors?.name?.[0] ?? result.message;
+        setCategoryError(message);
         toast.error(result.message);
         return;
       }
 
+      setCategoryError("");
       setCategoryName("");
       toast.success(result.message);
       router.refresh();
@@ -92,7 +104,7 @@ export function SettingsPanel({
           <select
             value={locale}
             onChange={(event) => setLocale(event.target.value as "ar" | "en")}
-            className="w-full rounded-2xl border-none bg-surface-low px-4 py-3"
+            className="w-full rounded-2xl border border-outline-soft/40 bg-surface-low px-4 py-3 text-text-base outline-none transition focus:border-primary focus:bg-white focus:ring-4 focus:ring-black/5"
           >
             <option value="ar">العربية</option>
             <option value="en">English</option>
@@ -118,7 +130,9 @@ export function SettingsPanel({
               <button
                 key={value}
                 onClick={() => setTheme(value as "light" | "dark" | "system")}
-                className={`rounded-full px-4 py-2 text-sm ${theme === value ? "bg-primary text-white" : "bg-surface-low text-text-soft"}`}
+                className={`rounded-full px-4 py-2 text-sm ${
+                  theme === value ? "bg-primary text-white" : "bg-surface-low text-text-soft"
+                }`}
               >
                 {label}
               </button>
@@ -135,10 +149,14 @@ export function SettingsPanel({
           </div>
           <button
             onClick={() => setNotifications((current) => !current)}
-            className={`relative inline-flex h-8 w-16 items-center rounded-full transition ${notifications ? "bg-primary" : "bg-surface-dim"}`}
+            className={`relative inline-flex h-8 w-16 items-center rounded-full transition ${
+              notifications ? "bg-primary" : "bg-surface-dim"
+            }`}
           >
             <span
-              className={`inline-block h-6 w-6 rounded-full bg-white transition ${notifications ? "-translate-x-1" : "-translate-x-9"}`}
+              className={`inline-block h-6 w-6 rounded-full bg-white transition ${
+                notifications ? "-translate-x-1" : "-translate-x-9"
+              }`}
             />
           </button>
         </div>
@@ -155,18 +173,24 @@ export function SettingsPanel({
         <div className="flex flex-col gap-3 md:flex-row">
           <input
             value={categoryName}
-            onChange={(event) => setCategoryName(event.target.value)}
-            className="flex-1 rounded-2xl border-none bg-surface-low px-4 py-3"
+            onChange={(event) => {
+              setCategoryName(event.target.value);
+              if (categoryError) setCategoryError("");
+            }}
+            dir="rtl"
+            className="flex-1 rounded-2xl border border-outline-soft/40 bg-surface-low px-4 py-3 text-text-base outline-none transition placeholder:text-text-soft/60 focus:border-primary focus:bg-white focus:ring-4 focus:ring-black/5"
             placeholder="إضافة تصنيف جديد"
           />
           <button
             onClick={createCategory}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-surface-low px-4 py-3 text-sm font-semibold"
+            disabled={pending}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-surface-low px-4 py-3 text-sm font-semibold disabled:opacity-60"
           >
             <Plus className="h-4 w-4" />
             إضافة
           </button>
         </div>
+        {categoryError ? <p className="mt-3 text-sm text-danger">{categoryError}</p> : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {categories.map((category) => (
